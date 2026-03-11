@@ -1,1 +1,2 @@
+task.wait(5)
 game.Players.LocalPlayer:Kick("Banned by anti-cheat.")
