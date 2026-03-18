@@ -1,2 +1,802 @@
-task.wait(5)
-game.Players.LocalPlayer:Kick("Banned by anti-cheat.")
+-- =====================================================
+-- 1. LOAD UI LIBRARY
+-- =====================================================
+
+local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/Consistt/Ui/main/UnLeaked"))()
+
+library.rank = "Basic"
+
+local Wm = library:Watermark("VAPE | v"..library.version.." | "..library:GetUsername().." | VERSION: "..library.rank)
+local FpsWm = Wm:AddWatermark("Fps: "..library.fps)
+
+coroutine.wrap(function()
+    while task.wait(.75) do
+        FpsWm:Text("Fps: "..library.fps)
+    end
+end)()
+
+local Notif = library:InitNotifications()
+Notif:Notify("Loading VAPE...",5,"information")
+
+library.title = "VAPE"
+
+library:Introduction()
+task.wait(1)
+
+local Init = library:Init()
+
+--// STORAGE
+local punchConnCache = {}
+
+--// KEYBINDS
+
+local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+
+local uiVisible = true
+local overlayVisible = true
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    -- prevents activating while typing
+    if gameProcessed then return end
+    if UserInputService:GetFocusedTextBox() then return end
+
+    -- N = Toggle Watermark + FPS
+    if input.KeyCode == Enum.KeyCode.N then
+        overlayVisible = not overlayVisible
+
+        if overlayVisible then
+            Wm:Show()
+            FpsWm:Show()
+        else
+            Wm:Hide()
+            FpsWm:Hide()
+        end
+    end
+
+end)
+
+local applyPunchSpeedToLocalLive
+-- =====================================================
+-- 3. UI BUILD
+-- =====================================================
+
+local CombatTab = Init:NewTab("Combat")
+local OtherTab = Init:NewTab("Other")
+local Components = CombatTab:NewSection("Components")
+local OtherComponents = OtherTab:NewSection("Components")
+
+
+-- =========================
+-- HITBOX
+-- =========================
+
+local HitboxEnabled = false
+local TargetHitboxSize = 3
+local HitboxTransparency = 0.8
+local RagerMode = false
+
+CombatTab:NewLabel("Hitbox","left")
+
+CombatTab:NewToggle("Enable Hitbox",false,function(v)
+    HitboxEnabled = v
+end)
+
+CombatTab:NewToggle("RAGER",false,function(v)
+	RagerMode = v
+end)
+
+CombatTab:NewSlider(
+	"Hitbox Size",
+	"",
+	false,
+	"",
+	{min=3,max=100,default=3},
+function(v)
+
+	v = math.round(v)
+	TargetHitboxSize = v
+end
+)
+
+CombatTab:NewSlider(
+    "Hitbox Transparency",
+    "",
+    false,
+    "",
+    {min=0,max=10,default=8},
+function(v)
+    HitboxTransparency = v / 10
+end
+)
+
+-- =========================
+-- PUNCH SPEED
+-- =========================
+
+local PunchSection = CombatTab:NewSection("Punch Speed")
+
+local currentPunchSpeed = 1.7
+
+CombatTab:NewSlider(
+    "Punch Speed",
+    "",
+    false,
+    "",
+    {min=17,max=22,default=17},
+function(v)
+    local speed = v / 10
+    applyPunchSpeedToLocalLive(speed)
+end
+)
+
+-- =========================
+-- WALK SPEED
+-- =========================
+
+local WalkSection = CombatTab:NewSection("Walk Speed")
+
+local WalkSpeed = 16
+local WS_Protection = true
+local isTriggerHeld = false
+
+CombatTab:NewSlider(
+    "Walk Speed",
+    "",
+    false,
+    "",
+    {min=10,max=100,default=16},
+    function(v)
+        WalkSpeed = v
+    end
+)
+
+CombatTab:NewToggle("WS Protection",true,function(v)
+    WS_Protection = v
+end)
+
+-- =========================
+-- ANTI STUN
+-- =========================
+
+local AntiStunEnabled = false
+
+CombatTab:NewToggle("Anti Stun",false,function(v)
+    AntiStunEnabled = v
+end)
+
+-- =========================
+-- ADMIN DETECTION
+-- =========================
+
+local AdminDetectEnabled = false
+
+OtherTab:NewToggle("Moderator Detection",false,function(v)
+    AdminDetectEnabled = v
+end)
+
+
+-- =========================
+-- SCRIPT DETECTION
+-- =========================
+
+local ScriptDetectEnabled = false
+
+OtherTab:NewToggle("Script Detector",false,function(v)
+    ScriptDetectEnabled = v 
+end)
+
+
+-- =========================
+-- AUTO-WEAVE UTILITIES
+-- =========================
+local function fistsEquipped()
+
+    local live = workspace:FindFirstChild("Live")
+    if not live then return false end
+
+    local myModel = live:FindFirstChild(LocalPlayer.Name)
+    if not myModel then return false end
+
+    return myModel:FindFirstChild("Fight") ~= nil
+
+end
+
+-- =========================
+-- AUTO WEAVE
+-- =========================
+local AutoWeaveConnection
+local AutoWeave = false
+local WeaveDelay = 0.2
+
+local AutoWeaveSection = CombatTab:NewSection("Auto Weave")
+
+CombatTab:NewLabel("Auto Weave","left")
+
+CombatTab:NewToggle("Auto Weave",false,function(state)
+
+    AutoWeave = state
+
+    if AutoWeaveConnection then
+        AutoWeaveConnection:Disconnect()
+        AutoWeaveConnection = nil
+    end
+
+    if not state then return end
+
+local elapsed = 0
+local weaveRemote
+
+AutoWeaveConnection = RunService.Heartbeat:Connect(function(dt)
+
+    if not AutoWeave then return end
+    if not fistsEquipped() then return end
+
+    local char = LocalPlayer.Character
+    if not char then return end
+
+    -- only find remote once
+    if not weaveRemote then
+        local core = char:FindFirstChild("Core")
+        if not core then return end
+
+        local comm = core:FindFirstChild("Communicate")
+        if not comm then return end
+
+        for _,v in pairs(comm:GetChildren()) do
+            if v:IsA("RemoteEvent") then
+                weaveRemote = v
+                break
+            end
+        end
+
+        if not weaveRemote then return end
+
+        if not fistsEquipped() then
+            weaveRemote = nil
+            return
+        end
+    end
+
+    elapsed += dt
+
+    -- micro variation to avoid perfect timing
+    local interval = WeaveDelay + (math.random() - 0.5) * 0.00005
+
+    if elapsed >= interval then
+        elapsed = 0
+
+        local RemoteArgs = {"Weave", nil, true}
+
+        pcall(function()
+        weaveRemote:FireServer(unpack(RemoteArgs))
+            task.wait(2)
+            weaveRemote:FireServer(unpack(RemoteArgs))
+        end)
+
+
+    end
+
+end)
+end)
+
+CombatTab:NewSlider(
+    "Weave Delay",
+    "",
+    false,
+    "",
+    {min=0,max=50,default=20},
+function(v)
+    WeaveDelay = v / 100
+end
+)
+
+-- =========================
+-- ADMIN DETECTION SYSTEM
+-- =========================
+
+local moderator = {
+    3237925776, -- squirrelzio
+    874780009, -- Ace
+    257635940, -- Yolo
+    81334428, -- crqma
+    690913936, -- Hao
+    3700792165, -- RayW
+    44943964, -- Tactic
+    518821929 -- AfraiCat
+}
+
+
+local developer = {
+    254867847, -- Soup
+    17079408, -- Crut
+    2248488540 -- Krissy3D
+}
+
+local owner = {
+    3410897369 -- ethourah
+}
+
+
+local function checkAdmin(plr)
+
+    if not AdminDetectEnabled then return end
+
+    local id = plr.UserId
+
+    for _,v in ipairs(owner) do
+        if id == v then
+            Notif:Notify(plr.Name.." (Owner) Joined. Be Advised",6,"warning")
+            return
+        end
+    end
+
+    for _,v in ipairs(developer) do
+        if id == v then
+            Notif:Notify(plr.Name.." (Developer) Joined. Be Advised",6,"warning")
+            return
+        end
+    end
+
+    for _,v in ipairs(moderator) do
+        if id == v then
+            Notif:Notify(plr.Name.." (Moderator) Joined. Be Advised",6,"warning")
+            return
+        end
+    end
+
+end
+
+-- Check players already in the game
+for _,plr in ipairs(Players:GetPlayers()) do
+    if plr ~= LocalPlayer then
+        checkAdmin(plr)
+    end
+end
+
+-- Detect admins joining
+Players.PlayerAdded:Connect(function(plr)
+    checkAdmin(plr)
+end)
+
+
+-- =====================================================
+-- 5. HITBOX UTILITIES
+-- =====================================================
+
+local originalHRPProps = {}
+
+local function resetHRP(targetPlayer)
+
+    local props = originalHRPProps[targetPlayer]
+
+    if props and targetPlayer.Character then
+
+        local Root = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+
+        if Root then
+
+            Root.Size = props.Size
+            Root.Transparency = props.Transparency
+            Root.CanCollide = props.CanCollide
+            Root.Color = props.Color
+            Root.CanTouch = false
+            Root.CanQuery = false
+
+        end
+    end
+end
+
+local function updateHitbox(targetPlayer)
+
+	if targetPlayer == LocalPlayer then return end
+	if not targetPlayer.Character then return end
+
+	local Root = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+	local Hum = targetPlayer.Character:FindFirstChildOfClass("Humanoid")
+
+	if not Root or not Hum then return end
+
+	local liveFolder = workspace:FindFirstChild("Live")
+	local entry = liveFolder and liveFolder:FindFirstChild(targetPlayer.Name)
+
+	local isKnocked =
+	(entry and entry:FindFirstChild("Knocked") and entry.Knocked.Value == true)
+	or Hum.Health <= 0
+    or Hum.PlatformStand
+
+	if isKnocked then
+    if not RagerMode then
+        resetHRP(targetPlayer)
+        return
+    end
+end
+
+	if HitboxEnabled then
+
+		if not originalHRPProps[targetPlayer] then
+
+			originalHRPProps[targetPlayer] = {
+				Size = Root.Size,
+				Transparency = Root.Transparency,
+				CanCollide = Root.CanCollide,
+				Color = Root.Color
+			}
+
+		end
+
+
+		Root.Size = Vector3.new(TargetHitboxSize, TargetHitboxSize, TargetHitboxSize)
+		Root.Transparency = HitboxTransparency
+		Root.Material = Enum.Material.SmoothPlastic
+		Root.Color = Color3.fromRGB(0,0,0)
+		Root.CanCollide = false
+        Root.CastShadow = false
+        Root.CanQuery = true
+        Root.CanTouch = false
+        Root.AssemblyLinearVelocity = Vector3.zero
+        Root.AssemblyAngularVelocity = Vector3.zero
+        Root.CustomPhysicalProperties = PhysicalProperties.new(0,0,0,0,0)
+
+        pcall(function()
+    Root:SetNetworkOwner(LocalPlayer)
+end)
+
+
+
+	else
+		resetHRP(targetPlayer)
+        originalHRPProps[targetPlayer] = nil
+        Root.Material = Enum.Material.Plastic
+        Root.CanQuery = false
+	end
+
+end
+
+-- =====================================================
+-- 6. WALK SPEED LOGIC
+-- =====================================================
+
+local function enforceSpeed(hum)
+
+    if not hum then return end
+    if not WS_Protection then return end
+
+    -- NORMAL MODE
+    if not RagerMode then
+        
+        -- allow dodge lock
+        if isTriggerHeld then
+            return
+        end
+        
+        hum.WalkSpeed = WalkSpeed
+        return
+    end
+
+    -- RAGER MODE (always force speed)
+    hum.WalkSpeed = WalkSpeed
+
+end
+
+LocalPlayer.CharacterAdded:Connect(function(char)
+
+    local hum = char:WaitForChild("Humanoid",10)
+
+    if hum then
+
+        task.wait(0.2)
+        hum.WalkSpeed = WalkSpeed
+
+        hum:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
+            enforceSpeed(hum)
+        end)
+
+    end
+
+end)
+
+-- =====================================================
+-- 7. PUNCH SPEED SYSTEM
+-- =====================================================
+local punchIDs = {
+    ["18312333191"] = true, 
+    ["18312335714"] = true,
+    ["18312338197"] = true, 
+    ["18312340119"] = true,
+    ["18312344029"] = true, 
+    ["18312346524"] = true,
+    ["18312348771"] = true,
+    ["18312351760"] = true
+}
+
+local function safePunch(fn) pcall(fn) end
+
+local function isPunch(track)
+    if not track or not track.Animation then return false end
+    if track.Priority == Enum.AnimationPriority.Core or 
+       track.Priority == Enum.AnimationPriority.Idle or 
+       track.Priority == Enum.AnimationPriority.Movement then return false end
+       
+    local id = track.Animation.AnimationId:match("%d+")
+    if punchIDs[id] then return true end
+    
+    local name = track.Name:lower()
+    return (name:find("punch") or name:find("swing") or name:find("attack")) and not name:find("walk") and not name:find("run")
+end
+
+local function punchDisconnectKey(key)
+    local c = punchConnCache[key]
+    if c and c.Disconnect then pcall(function() c:Disconnect() end) end
+    punchConnCache[key] = nil
+end
+
+local function findLocalLive()
+    local live = workspace:FindFirstChild("Live")
+    if not live then return nil end
+    local myModel = live:FindFirstChild(LocalPlayer.Name)
+    if not myModel then return nil end
+    local hum = myModel:FindFirstChildOfClass("Humanoid")
+    if not hum then return nil end
+    local anim = hum:FindFirstChildOfClass("Animator")
+    return myModel, hum, anim
+end
+
+applyPunchSpeedToLocalLive = function(mult)
+    -- Update global variable so it remembers what we set
+    if mult then currentPunchSpeed = mult end
+    
+    local myModel, hum, anim = findLocalLive()
+    
+    if not myModel then return end
+    
+    -- Adjust currently playing tracks
+if anim then
+    for _, t in ipairs(anim:GetPlayingAnimationTracks()) do
+        if isPunch(t) then
+            safePunch(function()
+                t:AdjustSpeed(currentPunchSpeed)
+            end)
+        end
+    end
+end
+    
+    -- Hook Humanoid (Secondary check)
+    if hum then
+        punchDisconnectKey(hum)
+        punchConnCache[hum] = hum.AnimationPlayed:Connect(function(t)
+            if isPunch(t) then safePunch(function() t:AdjustSpeed(currentPunchSpeed) end) end
+        end)
+    end
+end
+
+-- RESPAWN MONITOR: This ensures speed persists after death
+local function startRespawnMonitor()
+    local function hookLiveFolder(folder)
+        folder.ChildAdded:Connect(function(child)
+            -- If the new child is ME (The Player)
+            if child.Name == LocalPlayer.Name then
+                -- Wait a split second for the Animator to load, then re-apply speed
+                task.wait(0.5)
+                applyPunchSpeedToLocalLive(currentPunchSpeed)
+            end
+        end)
+    end
+
+    local existingLive = workspace:FindFirstChild("Live")
+    if existingLive then hookLiveFolder(existingLive) end
+
+    -- Watch for map resets (Live folder recreation)
+    workspace.ChildAdded:Connect(function(c)
+        if c.Name == "Live" then
+            hookLiveFolder(c)
+        end
+    end)
+end
+
+task.spawn(startRespawnMonitor)
+task.spawn(function() applyPunchSpeedToLocalLive(currentPunchSpeed) end)
+
+
+-- =========================
+-- SCRIPT DETECTION SYSTEM
+-- =========================
+
+local ScriptDetectEnabled = true
+
+local flaggedPlayers = {}
+local lastWalkSpeed = {}
+
+local function notifyOnce(plr,msg)
+
+    if flaggedPlayers[plr] then return end
+    flaggedPlayers[plr] = true
+
+    Notif:Notify(plr.Name.." "..msg,6,"warning")
+
+end
+
+
+local function monitorPlayer(plr)
+
+    if plr == LocalPlayer then return end
+
+    plr.CharacterAdded:Connect(function(char)
+
+        local hum = char:WaitForChild("Humanoid",10)
+        local root = char:WaitForChild("HumanoidRootPart",10)
+
+        if not hum or not root then return end
+
+        -- WALK SPEED DETECTION
+        hum:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
+
+            if not ScriptDetectEnabled then return end
+
+            local speed = hum.WalkSpeed
+            local live = workspace:FindFirstChild("Live")
+            local entry = live and live:FindFirstChild(plr.Name)
+
+            local sprinting = false
+
+            if entry and entry:FindFirstChild("Sprint") then
+                sprinting = entry.Sprint.Value
+            end
+
+            if speed > 10 and not sprinting then
+
+                if lastWalkSpeed[plr] ~= speed then
+
+                    Notif:Notify(plr.Name.." may be using WalkSpeed ("..speed..")",6,"warning")
+                    lastWalkSpeed[plr] = speed
+
+                end
+
+            end
+
+        end)
+
+        -- HITBOX DETECTION
+        task.spawn(function()
+
+            while char.Parent do
+                task.wait(1)
+
+                if not ScriptDetectEnabled then continue end
+
+                if root.Size.X > 3 then
+                    notifyOnce(plr,"may be using Hitbox Expander")
+                end
+
+            end
+
+        end)
+
+        -- ANTI STUN DETECTION
+        char.ChildRemoved:Connect(function(obj)
+
+            if not ScriptDetectEnabled then return end
+
+            if obj.Name == "WeaveStun" then
+                notifyOnce(plr,"may be using Anti-Stun")
+            end
+
+        end)
+        
+
+    end)
+
+end
+
+
+-- Monitor existing players
+for _,plr in pairs(Players:GetPlayers()) do
+    monitorPlayer(plr)
+    monitorPunchSpeed(plr)
+end
+
+-- Monitor players joining
+Players.PlayerAdded:Connect(function(plr)
+    monitorPlayer(plr)
+    monitorPunchSpeed(plr)
+end)
+
+
+-- =====================================================
+-- 8. CORE LOOPS
+-- =====================================================
+RunService.RenderStepped:Connect(function()
+
+    -- ANTI STUN
+    if AntiStunEnabled then
+
+        local char = LocalPlayer.Character
+
+        if char then
+
+            for _,obj in pairs(char:GetChildren()) do
+
+                if obj.Name == "Stun"
+                or obj.Name == "Slow"
+                or obj.Name == "Weight"
+                or obj.Name == "WeaveStun" then
+
+                    obj:Destroy()
+
+                end
+
+            end
+
+        end
+
+    end
+
+
+end)
+
+RunService.Heartbeat:Connect(function()
+
+local liveFolder = workspace:FindFirstChild("Live")
+
+if liveFolder then
+    for _,char in ipairs(liveFolder:GetChildren()) do
+        local plr = Players:FindFirstChild(char.Name)
+        if plr then
+            updateHitbox(plr)
+        end
+    end
+end
+
+
+	local char = LocalPlayer.Character
+	local hum = char and char:FindFirstChildOfClass("Humanoid")   
+
+    if hum and WS_Protection then
+
+    if not RagerMode then
+        
+        -- allow dodge frame
+        if not isTriggerHeld then
+            if hum.WalkSpeed ~= WalkSpeed then
+                hum.WalkSpeed = WalkSpeed
+            end
+        end
+        
+    else
+        
+        -- RAGER: force speed (causes slide)
+        if hum.WalkSpeed ~= WalkSpeed then
+            hum.WalkSpeed = WalkSpeed
+        end
+        
+    end
+
+end
+
+end)
+
+-- =====================================================
+-- 9. INPUT LOGIC
+-- =====================================================
+
+UserInputService.InputBegan:Connect(function(input,gp)
+
+    if gp then return end
+
+    if input.KeyCode == Enum.KeyCode.Space or input.KeyCode == Enum.KeyCode.ButtonL2 then
+        isTriggerHeld = true
+    end
+
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+
+    if input.KeyCode == Enum.KeyCode.Space or input.KeyCode == Enum.KeyCode.ButtonL2 then
+        isTriggerHeld = false
+    end
+
+end)
+
+Notif:Notify("VAPE Loaded",4,"success")
